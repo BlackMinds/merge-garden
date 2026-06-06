@@ -133,6 +133,30 @@
     line-height:1.6;
   }
   footer b{color:var(--pink);}
+  /* 难度选择 */
+  .diff-select{
+    display:flex;gap:8px;justify-content:center;
+    width:100%;padding:0 4px;
+  }
+  .diff-btn{
+    flex:1;max-width:120px;
+    border:2px solid transparent;cursor:pointer;
+    background:rgba(255,255,255,0.7);
+    border-radius:18px;padding:10px 6px;
+    display:flex;flex-direction:column;align-items:center;gap:3px;
+    box-shadow:0 4px 12px rgba(180,150,170,.18),inset 0 1px 0 #fff;
+    transition:transform .12s ease, border-color .12s ease, box-shadow .12s ease;
+    color:var(--text);
+  }
+  .diff-btn:active{transform:scale(.94);}
+  .diff-btn.on{
+    border-color:var(--pink);
+    background:#fff;
+    box-shadow:0 6px 16px rgba(255,127,163,.35),inset 0 1px 0 #fff;
+  }
+  .diff-btn .d-emoji{font-size:24px;line-height:1;}
+  .diff-btn .d-name{font-size:14px;font-weight:800;}
+  .diff-btn .d-tip{font-size:10px;color:var(--text-soft);line-height:1.3;text-align:center;}
 </style>
 </head>
 <body>
@@ -140,24 +164,26 @@
     <header>
       <div class="title">🍉 合成乐园</div>
       <div class="tools">
+        <button class="btn" id="diffBtn" title="难度">🍓</button>
         <button class="btn" id="soundBtn" title="音效">🔊</button>
         <button class="btn" id="restartBtn" title="重新开始">🔄</button>
       </div>
     </header>
 
     <div class="stats">
-      <div class="stat"><span class="k">🏆 最高分</span><span class="v" id="best">0</span></div>
+      <div class="stat"><span class="k" id="bestK">🏆 最高分</span><span class="v" id="best">0</span></div>
       <div class="stat"><span class="k">⭐ 当前分</span><span class="v" id="score">0</span></div>
       <div class="stat"><span class="k">下一个</span><span class="v next-emoji" id="next">🫐</span></div>
     </div>
 
     <div class="stage">
       <canvas id="game"></canvas>
-      <div class="overlay hidden" id="overlay">
-        <h2 id="ovTitle">游戏结束</h2>
-        <div class="final">本局得分 <b id="ovScore">0</b></div>
-        <div class="final" id="ovTip" style="font-size:14px;color:var(--text-soft);"></div>
-        <button class="play-btn" id="playBtn">再玩一次 🍓</button>
+      <div class="overlay" id="overlay">
+        <h2 id="ovTitle">🍉 合成乐园</h2>
+        <div class="final" id="ovScoreWrap" style="display:none;">本局得分 <b id="ovScore">0</b></div>
+        <div class="final" id="ovTip" style="font-size:14px;color:var(--text-soft);">选择难度，开始治愈之旅 🌸</div>
+        <div class="diff-select" id="diffSelect"></div>
+        <button class="play-btn" id="playBtn">开始游戏 🍓</button>
       </div>
     </div>
 
@@ -197,10 +223,31 @@
   const ITER = 8;                // 碰撞解算迭代次数
   const STEP = 1000/60;          // 固定物理步长（毫秒）
   const DROP_Y = 52;             // 待投放水果的高度
-  const DEATH_LINE = 96;         // 死亡线
   const DEATH_GRACE = 24;        // 出生保护步数
-  const DEATH_TIME = 1200;       // 越线累计多久判负（毫秒）
-  const DROP_LEVELS = [0,0,0,1,1,1,2,2,3,4]; // 可投放等级（偏小权重）
+
+  // ===== 难度配置（死亡线越靠下 / 判负越快 / 水果越大 → 越难）=====
+  const DIFFICULTIES = {
+    easy:   {name:"悠闲", emoji:"🌸", tip:"空间更大 · 慢慢享受",
+             deathLine:78,  deathTime:1900, cooldown:360, drops:[0,0,0,0,0,1,1,1,2,2]},
+    normal: {name:"标准", emoji:"🍓", tip:"经典平衡 · 推荐",
+             deathLine:96,  deathTime:1200, cooldown:420, drops:[0,0,0,1,1,1,2,2,3,4]},
+    hard:   {name:"挑战", emoji:"🔥", tip:"空间更小 · 更刺激",
+             deathLine:118, deathTime:820,  cooldown:460, drops:[0,0,1,1,2,2,3,3,4,4]},
+  };
+  // 当前难度派生的可变参数（由 applyDifficulty 赋值）
+  let DEATH_LINE, DEATH_TIME, DROP_COOLDOWN, DROP_LEVELS;
+  let difficulty = localStorage.getItem("merge_diff") || "normal";
+  if(!DIFFICULTIES[difficulty]) difficulty = "normal";
+  function applyDifficulty(key){
+    difficulty = DIFFICULTIES[key] ? key : "normal";
+    const d = DIFFICULTIES[difficulty];
+    DEATH_LINE   = d.deathLine;
+    DEATH_TIME   = d.deathTime;
+    DROP_COOLDOWN= d.cooldown;
+    DROP_LEVELS  = d.drops;
+    localStorage.setItem("merge_diff", difficulty);
+  }
+  function bestKey(){ return "merge_best_" + difficulty; }
 
   // ===== 画布初始化（高清适配）=====
   const canvas = document.getElementById("game");
@@ -216,7 +263,7 @@
   let nextLevel = 0;      // 下一个等级
   let currentX = W/2;     // 当前投放水平位置
   let score = 0;
-  let best = +(localStorage.getItem("merge_best") || 0);
+  let best = +(localStorage.getItem(bestKey()) || 0);  // 当前难度最高分，reloadBest() 刷新
   let overTime = 0;       // 越线累计时间
   let dropCooldown = 0;   // 投放冷却
   let gameover = false;
@@ -368,7 +415,7 @@
     f.sc = 0.8;
     fruits.push(f);
     current = null;
-    dropCooldown = 420;
+    dropCooldown = DROP_COOLDOWN;
     playDrop();
   }
 
@@ -479,26 +526,74 @@
     document.getElementById("score").textContent = score;
     if(score > best){
       best = score;
-      localStorage.setItem("merge_best", best);
+      localStorage.setItem(bestKey(), best);
       document.getElementById("best").textContent = best;
     }
+  }
+  // 载入当前难度的最高分并刷新显示
+  function reloadBest(){
+    best = +(localStorage.getItem(bestKey()) || 0);
+    document.getElementById("best").textContent = best;
+    document.getElementById("bestK").textContent = "🏆 " + DIFFICULTIES[difficulty].name + "·最高";
+  }
+  function refreshDiffBtn(){
+    document.getElementById("diffBtn").textContent = DIFFICULTIES[difficulty].emoji;
+  }
+  // 构建难度选择按钮（开始 / 结束界面共用）
+  function buildDiffSelect(){
+    const wrap = document.getElementById("diffSelect");
+    wrap.innerHTML = "";
+    Object.keys(DIFFICULTIES).forEach(key=>{
+      const d = DIFFICULTIES[key];
+      const b = document.createElement("button");
+      b.className = "diff-btn" + (key===difficulty ? " on" : "");
+      b.innerHTML = '<span class="d-emoji">'+d.emoji+'</span>'
+                  + '<span class="d-name">'+d.name+'</span>'
+                  + '<span class="d-tip">'+d.tip+'</span>';
+      b.addEventListener("click", ()=>{
+        applyDifficulty(key);
+        buildDiffSelect();   // 刷新选中态
+        refreshDiffBtn();
+        reloadBest();        // 切到该难度的最高分
+      });
+      wrap.appendChild(b);
+    });
+  }
+  // 开始 / 难度选择界面（暂停并展示空舞台）
+  function showStartScreen(){
+    gameover = true; current = null;
+    fruits = []; particles = [];
+    overTime = 0; score = 0;
+    document.getElementById("score").textContent = "0";
+    document.getElementById("ovTitle").textContent = "🍉 合成乐园";
+    document.getElementById("ovScoreWrap").style.display = "none";
+    document.getElementById("ovTip").textContent = "选择难度，开始治愈之旅 🌸";
+    document.getElementById("playBtn").textContent = "开始游戏 🍓";
+    buildDiffSelect();
+    reloadBest();
+    document.getElementById("overlay").classList.remove("hidden");
   }
   function endGame(){
     if(gameover) return;
     gameover = true;
     playOver();
+    document.getElementById("ovTitle").textContent = "游戏结束";
+    document.getElementById("ovScoreWrap").style.display = "";
     document.getElementById("ovScore").textContent = score;
     const tips = ["要不要再来一局?🍓","治愈一下,再玩一次吧🌸","你已经很厉害啦!✨","深呼吸,放轻松再来~🫧"];
     document.getElementById("ovTip").textContent = tips[(Math.random()*tips.length)|0];
+    document.getElementById("playBtn").textContent = "再玩一次 🍓";
+    buildDiffSelect();
     document.getElementById("overlay").classList.remove("hidden");
   }
   function restart(){
+    applyDifficulty(difficulty);  // 确保派生参数与当前难度同步
     fruits = []; particles = [];
     score = 0; overTime = 0; dropCooldown = 0;
     gameover = false; current = null;
     nextLevel = randLevel();
     spawnCurrent();
-    updateScore();
+    reloadBest();
     document.getElementById("score").textContent = "0";
     document.getElementById("overlay").classList.add("hidden");
   }
@@ -528,6 +623,7 @@
   // 按钮
   document.getElementById("restartBtn").addEventListener("click", ()=>{ ensureAudio(); restart(); });
   document.getElementById("playBtn").addEventListener("click", ()=>{ ensureAudio(); restart(); });
+  document.getElementById("diffBtn").addEventListener("click", ()=>{ ensureAudio(); showStartScreen(); });
   const soundBtn = document.getElementById("soundBtn");
   function refreshSound(){ soundBtn.textContent = muted ? "🔇" : "🔊"; }
   soundBtn.addEventListener("click", ()=>{
@@ -554,9 +650,10 @@
   })();
 
   // ===== 启动 =====
-  document.getElementById("best").textContent = best;
+  applyDifficulty(difficulty);
   refreshSound();
-  restart();
+  refreshDiffBtn();
+  showStartScreen();   // 先展示难度选择，点「开始游戏」再进入
   requestAnimationFrame(loop);
 })();
 </script>
