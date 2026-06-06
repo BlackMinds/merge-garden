@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>🍉 合成乐园 · 治愈小游戏</title>
+<style>
+  :root{
+    --pink:#ff8fab;
+    --pink-soft:#ffd6e3;
+    --text:#7a5c66;
+    --text-soft:#b59aa3;
+    --panel:rgba(255,255,255,0.72);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;margin:0;}
+  body{
+    font-family:"PingFang SC","Microsoft YaHei","Segoe UI",system-ui,sans-serif;
+    background:linear-gradient(160deg,#ffeef5 0%,#f6e9ff 45%,#e3f1ff 100%);
+    background-attachment:fixed;
+    color:var(--text);
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    min-height:100%;
+    padding:18px 14px 30px;
+  }
+  .app{
+    width:100%;
+    max-width:440px;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+  /* 顶部标题 */
+  header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+  }
+  .title{
+    font-size:24px;
+    font-weight:800;
+    letter-spacing:1px;
+    color:var(--pink);
+    text-shadow:0 2px 0 #fff,0 4px 12px rgba(255,143,171,.25);
+    display:flex;align-items:center;gap:6px;
+  }
+  .tools{display:flex;gap:8px;}
+  .btn{
+    border:none;cursor:pointer;
+    background:var(--panel);
+    color:var(--text);
+    font-size:18px;
+    width:42px;height:42px;border-radius:16px;
+    box-shadow:0 4px 12px rgba(180,150,170,.25),inset 0 1px 0 #fff;
+    transition:transform .12s ease, box-shadow .12s ease;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .btn:active{transform:scale(.92);}
+  /* 分数栏 */
+  .stats{
+    display:flex;
+    gap:10px;
+  }
+  .stat{
+    flex:1;
+    background:var(--panel);
+    border-radius:18px;
+    padding:8px 12px;
+    box-shadow:0 4px 14px rgba(180,150,170,.18),inset 0 1px 0 #fff;
+    display:flex;flex-direction:column;align-items:center;line-height:1.2;
+  }
+  .stat .k{font-size:12px;color:var(--text-soft);}
+  .stat .v{font-size:22px;font-weight:800;color:var(--text);}
+  .stat .v small{font-size:13px;font-weight:600;}
+  .next-emoji{font-size:24px;}
+  /* 游戏舞台 */
+  .stage{
+    position:relative;
+    background:var(--panel);
+    border-radius:26px;
+    padding:10px;
+    box-shadow:0 12px 30px rgba(180,150,170,.28),inset 0 1px 0 #fff;
+  }
+  canvas{
+    display:block;
+    width:100%;
+    aspect-ratio:400/600;
+    border-radius:18px;
+    background:linear-gradient(180deg,#fffafc 0%,#fff2f7 100%);
+    touch-action:none;
+  }
+  /* 结束遮罩 */
+  .overlay{
+    position:absolute;inset:10px;
+    border-radius:18px;
+    background:rgba(255,240,246,.86);
+    backdrop-filter:blur(6px);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+    text-align:center;
+    transition:opacity .25s ease;
+  }
+  .overlay.hidden{opacity:0;pointer-events:none;}
+  .overlay h2{margin:0;font-size:30px;color:var(--pink);}
+  .overlay .final{font-size:18px;color:var(--text);}
+  .overlay .final b{font-size:30px;color:var(--pink);}
+  .play-btn{
+    border:none;cursor:pointer;
+    background:linear-gradient(180deg,#ffa6bf,#ff7fa3);
+    color:#fff;font-size:18px;font-weight:800;letter-spacing:1px;
+    padding:13px 34px;border-radius:30px;
+    box-shadow:0 8px 18px rgba(255,127,163,.45),inset 0 1px 0 rgba(255,255,255,.5);
+    transition:transform .12s ease;
+  }
+  .play-btn:active{transform:scale(.94);}
+  /* 合成图鉴 */
+  .chain{
+    background:var(--panel);
+    border-radius:18px;
+    padding:10px 6px;
+    box-shadow:0 4px 14px rgba(180,150,170,.18),inset 0 1px 0 #fff;
+  }
+  .chain .label{font-size:12px;color:var(--text-soft);text-align:center;margin-bottom:4px;}
+  .chain .row{
+    display:flex;align-items:center;justify-content:center;
+    flex-wrap:wrap;gap:2px;font-size:18px;
+  }
+  .chain .arrow{color:var(--text-soft);font-size:11px;}
+  footer{
+    text-align:center;font-size:12px;color:var(--text-soft);
+    line-height:1.6;
+  }
+  footer b{color:var(--pink);}
+</style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="title">🍉 合成乐园</div>
+      <div class="tools">
+        <button class="btn" id="soundBtn" title="音效">🔊</button>
+        <button class="btn" id="restartBtn" title="重新开始">🔄</button>
+      </div>
+    </header>
+
+    <div class="stats">
+      <div class="stat"><span class="k">🏆 最高分</span><span class="v" id="best">0</span></div>
+      <div class="stat"><span class="k">⭐ 当前分</span><span class="v" id="score">0</span></div>
+      <div class="stat"><span class="k">下一个</span><span class="v next-emoji" id="next">🫐</span></div>
+    </div>
+
+    <div class="stage">
+      <canvas id="game"></canvas>
+      <div class="overlay hidden" id="overlay">
+        <h2 id="ovTitle">游戏结束</h2>
+        <div class="final">本局得分 <b id="ovScore">0</b></div>
+        <div class="final" id="ovTip" style="font-size:14px;color:var(--text-soft);"></div>
+        <button class="play-btn" id="playBtn">再玩一次 🍓</button>
+      </div>
+    </div>
+
+    <div class="chain">
+      <div class="label">合成图鉴 · 小水果越合越大</div>
+      <div class="row" id="chainRow"></div>
+    </div>
+
+    <footer>
+      🖐️ <b>左右移动</b>瞄准，<b>松手投放</b>　·　相同水果相撞会合成更大的<br>
+      别让水果堆超过顶部虚线哦，慢慢玩，享受治愈时光 🌸
+    </footer>
+  </div>
+
+<script>
+"use strict";
+(function(){
+  // ===== 水果数据：从小到大的合成链 =====
+  const FRUITS = [
+    {name:"蓝莓",   r:16,  c1:"#bcc8f4", c2:"#6c7fd6", emoji:"🫐", score:1},
+    {name:"樱桃",   r:22,  c1:"#ffb3c0", c2:"#e8556b", emoji:"🍒", score:3},
+    {name:"草莓",   r:29,  c1:"#ffa6b8", c2:"#ef4f6b", emoji:"🍓", score:6},
+    {name:"橘子",   r:37,  c1:"#ffd6a0", c2:"#ff9f43", emoji:"🍊", score:10},
+    {name:"柠檬",   r:46,  c1:"#fff0a0", c2:"#ffd633", emoji:"🍋", score:15},
+    {name:"猕猴桃", r:55,  c1:"#d2eda8", c2:"#7cc043", emoji:"🥝", score:21},
+    {name:"苹果",   r:65,  c1:"#ffb0b0", c2:"#e74c3c", emoji:"🍎", score:28},
+    {name:"桃子",   r:76,  c1:"#ffd2de", c2:"#ff8fab", emoji:"🍑", score:36},
+    {name:"菠萝",   r:88,  c1:"#ffe6a0", c2:"#f2c200", emoji:"🍍", score:45},
+    {name:"蜜瓜",   r:101, c1:"#d8f2ad", c2:"#95d44e", emoji:"🍈", score:55},
+    {name:"西瓜",   r:116, c1:"#9ce882", c2:"#2fa148", emoji:"🍉", score:66},
+  ];
+
+  // ===== 游戏常量 =====
+  const W = 400, H = 600;        // 画布内部分辨率
+  const GRAV = 0.45;             // 重力（每物理步）
+  const AIR = 0.985;             // 空气阻尼
+  const ITER = 8;                // 碰撞解算迭代次数
+  const STEP = 1000/60;          // 固定物理步长（毫秒）
+  const DROP_Y = 52;             // 待投放水果的高度
+  const DEATH_LINE = 96;         // 死亡线
+  const DEATH_GRACE = 24;        // 出生保护步数
+  const DEATH_TIME = 1200;       // 越线累计多久判负（毫秒）
+  const DROP_LEVELS = [0,0,0,1,1,1,2,2,3,4]; // 可投放等级（偏小权重）
+
+  // ===== 画布初始化（高清适配）=====
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  ctx.scale(dpr, dpr);
+
+  // ===== 游戏状态 =====
+  let fruits = [];
+  let current = null;     // 当前待投放 {level}
+  let nextLevel = 0;      // 下一个等级
+  let currentX = W/2;     // 当前投放水平位置
+  let score = 0;
+  let best = +(localStorage.getItem("merge_best") || 0);
+  let overTime = 0;       // 越线累计时间
+  let dropCooldown = 0;   // 投放冷却
+  let gameover = false;
+  let particles = [];
+
+  // ===== 音效（Web Audio 实时合成）=====
+  let audioCtx = null;
+  let muted = (localStorage.getItem("merge_mute") === "1");
+  function ensureAudio(){
+    if(!audioCtx){
+      try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){}
+    }
+    if(audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+  }
+  function tone(freq, dur, type, vol){
+    if(muted || !audioCtx) return;
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = type || "triangle";
+    osc.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol||0.14, t+0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+(dur||0.18));
+    osc.connect(g).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t+(dur||0.18)+0.02);
+  }
+  function playMerge(level){ tone(300 + level*48, 0.22, "triangle", 0.16); }
+  function playDrop(){ tone(200, 0.10, "sine", 0.10); }
+  function playOver(){
+    if(muted||!audioCtx) return;
+    [440,392,330,262].forEach((f,i)=>setTimeout(()=>tone(f,0.28,"sine",0.13), i*120));
+  }
+
+  // ===== 工具函数 =====
+  function makeFruit(level, x, y){
+    return {x, y, px:x, py:y, r:FRUITS[level].r, level, age:0, sc:1, dead:false, merging:false};
+  }
+  function randLevel(){
+    return DROP_LEVELS[(Math.random()*DROP_LEVELS.length)|0];
+  }
+  function spawnParticles(x, y, color){
+    const n = 10;
+    for(let i=0;i<n;i++){
+      const a = (Math.PI*2*i)/n + Math.random()*0.5;
+      const sp = 1.5 + Math.random()*2.5;
+      particles.push({x, y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp - 1,
+        life:1, color, size:2+Math.random()*3});
+    }
+  }
+
+  // ===== 物理步进 =====
+  function physicsStep(){
+    if(gameover) return;
+    // 1) 积分（Verlet）
+    for(const f of fruits){
+      if(f.dead) continue;
+      f.age++;
+      const vx = (f.x - f.px) * AIR;
+      const vy = (f.y - f.py) * AIR;
+      f.px = f.x; f.py = f.y;
+      f.x += vx;
+      f.y += vy + GRAV;
+      if(f.sc < 1){ f.sc += 0.14; if(f.sc>1) f.sc=1; }
+    }
+    // 2) 约束解算
+    const toMerge = [];
+    for(let it=0; it<ITER; it++){
+      // 墙壁与地板（顶部开放，用于判负）
+      for(const f of fruits){
+        if(f.dead) continue;
+        if(f.x < f.r) f.x = f.r;
+        if(f.x > W-f.r) f.x = W-f.r;
+        if(f.y > H-f.r) f.y = H-f.r;
+      }
+      // 圆与圆
+      for(let i=0;i<fruits.length;i++){
+        const a = fruits[i]; if(a.dead) continue;
+        for(let j=i+1;j<fruits.length;j++){
+          const b = fruits[j]; if(b.dead) continue;
+          let dx = b.x-a.x, dy = b.y-a.y;
+          const rr = a.r + b.r;
+          let d2 = dx*dx + dy*dy;
+          if(d2 < rr*rr){
+            let d = Math.sqrt(d2) || 0.01;
+            // 同级 → 最后一次迭代触发合成
+            if(it===ITER-1 && a.level===b.level && a.level<FRUITS.length-1
+               && !a.merging && !b.merging){
+              a.merging = b.merging = true;
+              toMerge.push([a,b]);
+              continue;
+            }
+            const overlap = (rr - d) * 0.5;
+            const nx = dx/d, ny = dy/d;
+            a.x -= nx*overlap; a.y -= ny*overlap;
+            b.x += nx*overlap; b.y += ny*overlap;
+          }
+        }
+      }
+    }
+    // 3) 处理合成
+    for(const [a,b] of toMerge){
+      if(a.dead||b.dead) continue;
+      a.dead = b.dead = true;
+      const nl = a.level + 1;
+      const mx = (a.x+b.x)/2, my = (a.y+b.y)/2;
+      const nf = makeFruit(nl, mx, my);
+      nf.py = nf.y + 2;  // 轻微上弹
+      nf.sc = 0;         // 放大出现动画
+      fruits.push(nf);
+      score += FRUITS[nl].score;
+      spawnParticles(mx, my, FRUITS[nl].c2);
+      playMerge(nl);
+    }
+    if(toMerge.length){
+      fruits = fruits.filter(f=>!f.dead);
+      updateScore();
+    }
+    for(const f of fruits) f.merging = false;
+
+    // 4) 死亡判定（停稳的水果越过死亡线累计计时）
+    let danger = false;
+    for(const f of fruits){
+      if(f.age < DEATH_GRACE) continue;
+      const sp = Math.hypot(f.x-f.px, f.y-f.py);
+      if(sp < 1.3 && (f.y - f.r) < DEATH_LINE){ danger = true; break; }
+    }
+    overTime = danger ? overTime + STEP : Math.max(0, overTime - STEP*1.5);
+    if(overTime > DEATH_TIME) endGame();
+
+    // 5) 投放冷却
+    if(!current){
+      dropCooldown -= STEP;
+      if(dropCooldown <= 0) spawnCurrent();
+    }
+  }
+
+  // ===== 投放控制 =====
+  function spawnCurrent(){
+    current = { level: nextLevel };
+    nextLevel = randLevel();
+    document.getElementById("next").textContent = FRUITS[nextLevel].emoji;
+  }
+  function dropCurrent(){
+    if(!current || gameover) return;
+    const lv = current.level;
+    const x = Math.max(FRUITS[lv].r, Math.min(W-FRUITS[lv].r, currentX));
+    const f = makeFruit(lv, x, DROP_Y);
+    f.sc = 0.8;
+    fruits.push(f);
+    current = null;
+    dropCooldown = 420;
+    playDrop();
+  }
+
+  // ===== 渲染 =====
+  function drawFruitShape(level, x, y, scale){
+    const r = FRUITS[level].r * scale;
+    if(r < 0.5) return;
+    const f = FRUITS[level];
+    // 柔和阴影
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y+r*0.12, r, 0, Math.PI*2);
+    ctx.fillStyle = "rgba(150,120,140,0.10)";
+    ctx.fill();
+    ctx.restore();
+    // 果冻渐变圆
+    const g = ctx.createRadialGradient(x-r*0.35, y-r*0.4, r*0.1, x, y, r);
+    g.addColorStop(0, f.c1);
+    g.addColorStop(1, f.c2);
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI*2);
+    ctx.fillStyle = g;
+    ctx.fill();
+    // 高光
+    ctx.beginPath();
+    ctx.ellipse(x-r*0.32, y-r*0.36, r*0.26, r*0.16, -0.5, 0, Math.PI*2);
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    ctx.fill();
+    // emoji
+    ctx.font = (r*1.35) + "px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(f.emoji, x, y+r*0.04);
+  }
+
+  function drawDeathLine(){
+    const warn = overTime > 0;
+    ctx.save();
+    ctx.setLineDash([8,8]);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = warn ? "rgba(255,90,120,0.8)" : "rgba(255,160,185,0.5)";
+    ctx.beginPath();
+    ctx.moveTo(10, DEATH_LINE);
+    ctx.lineTo(W-10, DEATH_LINE);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawGuide(x, level){
+    ctx.save();
+    ctx.setLineDash([4,8]);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(255,143,171,0.35)";
+    ctx.beginPath();
+    ctx.moveTo(x, DROP_Y + FRUITS[level].r);
+    ctx.lineTo(x, H-6);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function render(){
+    ctx.clearRect(0,0,W,H);
+    drawDeathLine();
+    for(const f of fruits) drawFruitShape(f.level, f.x, f.y, f.sc);
+    if(current && !gameover){
+      drawGuide(clampX(currentX, current.level), current.level);
+      drawFruitShape(current.level, clampX(currentX, current.level), DROP_Y, 1);
+    }
+    // 粒子
+    for(const p of particles){
+      ctx.globalAlpha = Math.max(0, p.life);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+      ctx.fillStyle = p.color;
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function clampX(x, level){
+    const r = FRUITS[level].r;
+    return Math.max(r, Math.min(W-r, x));
+  }
+
+  function updateParticles(){
+    for(const p of particles){
+      p.x += p.vx; p.y += p.vy; p.vy += 0.12;
+      p.life -= 0.035;
+    }
+    particles = particles.filter(p=>p.life>0);
+  }
+
+  // ===== 主循环（固定时间步）=====
+  let last = 0, acc = 0;
+  function loop(t){
+    if(!last) last = t;
+    let dt = t - last; last = t;
+    if(dt > 200) dt = 200;
+    acc += dt;
+    while(acc >= STEP){ physicsStep(); acc -= STEP; }
+    updateParticles();
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  // ===== UI 与交互 =====
+  function updateScore(){
+    document.getElementById("score").textContent = score;
+    if(score > best){
+      best = score;
+      localStorage.setItem("merge_best", best);
+      document.getElementById("best").textContent = best;
+    }
+  }
+  function endGame(){
+    if(gameover) return;
+    gameover = true;
+    playOver();
+    document.getElementById("ovScore").textContent = score;
+    const tips = ["要不要再来一局?🍓","治愈一下,再玩一次吧🌸","你已经很厉害啦!✨","深呼吸,放轻松再来~🫧"];
+    document.getElementById("ovTip").textContent = tips[(Math.random()*tips.length)|0];
+    document.getElementById("overlay").classList.remove("hidden");
+  }
+  function restart(){
+    fruits = []; particles = [];
+    score = 0; overTime = 0; dropCooldown = 0;
+    gameover = false; current = null;
+    nextLevel = randLevel();
+    spawnCurrent();
+    updateScore();
+    document.getElementById("score").textContent = "0";
+    document.getElementById("overlay").classList.add("hidden");
+  }
+
+  // 指针：左右移动 + 松手投放
+  function pointerX(e){
+    const rect = canvas.getBoundingClientRect();
+    const cx = (e.touches ? e.touches[0].clientX : e.clientX);
+    return (cx - rect.left) * (W / rect.width);
+  }
+  let pointerDown = false;
+  canvas.addEventListener("pointerdown", e=>{
+    ensureAudio();
+    if(gameover) return;
+    pointerDown = true;
+    currentX = pointerX(e);
+  });
+  canvas.addEventListener("pointermove", e=>{
+    if(!pointerDown && e.pointerType==="mouse"){ currentX = pointerX(e); return; }
+    if(pointerDown) currentX = pointerX(e);
+  });
+  window.addEventListener("pointerup", ()=>{
+    if(pointerDown && !gameover) dropCurrent();
+    pointerDown = false;
+  });
+
+  // 按钮
+  document.getElementById("restartBtn").addEventListener("click", ()=>{ ensureAudio(); restart(); });
+  document.getElementById("playBtn").addEventListener("click", ()=>{ ensureAudio(); restart(); });
+  const soundBtn = document.getElementById("soundBtn");
+  function refreshSound(){ soundBtn.textContent = muted ? "🔇" : "🔊"; }
+  soundBtn.addEventListener("click", ()=>{
+    ensureAudio();
+    muted = !muted;
+    localStorage.setItem("merge_mute", muted ? "1":"0");
+    refreshSound();
+  });
+
+  // 合成图鉴
+  (function buildChain(){
+    const row = document.getElementById("chainRow");
+    FRUITS.forEach((f,i)=>{
+      const s = document.createElement("span");
+      s.textContent = f.emoji;
+      s.title = f.name;
+      row.appendChild(s);
+      if(i < FRUITS.length-1){
+        const a = document.createElement("span");
+        a.className = "arrow"; a.textContent = "›";
+        row.appendChild(a);
+      }
+    });
+  })();
+
+  // ===== 启动 =====
+  document.getElementById("best").textContent = best;
+  refreshSound();
+  restart();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
